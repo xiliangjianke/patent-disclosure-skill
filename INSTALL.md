@@ -78,3 +78,35 @@ python -m playwright install chromium
 **Windows 终端中文**：`cnipa_epub_search.py` / `cnipa_epub_crawler.py` 已对 stdout/stderr 尝试 **UTF-8**（`reconfigure`）。若仍乱码，可在运行前执行 **`chcp 65001`**，或设置环境变量 **`PYTHONUTF8=1`**，以便复制 **`EPUB_HITS_JSON:`** 一行给 Agent 时不误判为失败。
 
 与主流程 `requirements.txt` **独立**；未安装时 Step 5 仍可按该 prompt 降级为 **WebSearch**（如 Google 学术）。
+
+## 强烈建议：专利通俗解读 + Obsidian 库
+
+**强烈建议安装并配置 Obsidian**，才能完整体验索引、Canvas 知识图谱、术语网、关系图配色与公开线索旁注。无库时可降级到 `outputs/patent_reader/`，效果会弱一截。
+
+对话开始前由 Agent 运行探测（也可手动）：
+
+```bash
+python tools/patent_reader/check_obsidian_env.py
+# 自动接受唯一/当前打开的库：
+python tools/patent_reader/check_obsidian_env.py --auto-accept
+# 手动指定并持久化（+ Windows 用户环境变量）：
+python tools/patent_reader/check_obsidian_env.py --set "C:\Users\你\Documents\Obsidian Vault" --setx
+```
+
+亦可仅设会话变量：
+
+```bash
+# Windows PowerShell
+$env:PATENT_READER_OBSIDIAN_VAULT = "D:\Obsidian\你的库"
+# 可选：库内目录，默认 Research/Patents
+$env:PATENT_READER_PAPERS_DIR = "Research/Patents"
+$env:PATENT_READER_GLOSSARY_DIR = "Research/术语"
+```
+
+```bash
+pip install -r tools/patent_reader/requirements.txt   # PDF：pymupdf
+```
+
+**首次使用**：解读**入库时会自动**初始化库（CSS、Bases、索引、关系图配色）。用户只需安装 Obsidian、配置库路径，并（可选）在社区插件市场安装 Dataview 等——步骤见 **`docs/obsidian-setup-guide.md`**；插件清单见 **`references/obsidian_recommended_plugins.md`**。交付后 Agent 按 **`prompts/obsidian_plugin_guide.md`** 引导可选插件。
+
+工具链见 **`tools/patent_reader/README.md`**。

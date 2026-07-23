@@ -1,10 +1,17 @@
 # 示例案件目录
 
-本目录提供**可随仓库提交的虚构原材料**，演示 **Step 2 项目扫描** 的输入形态（含 Office→Markdown 演练）。
+本目录提供**可随仓库提交的演练材料**。
 
 | 路径 | 说明 |
 |------|------|
-| `example_batch_job_scheduler/` | 虚构场景「分布式批任务调度与资源感知」；**仅含 `knowledge/` 原材料**，专利点 / 查新 / 交底书等请在 Agent 流程中生成到 `outputs/` |
+| `example_batch_job_scheduler/` | 虚构场景「分布式批任务调度与资源感知」；**仅含 `knowledge/` 原材料**，用于交底书主流程 Step 2 扫描演练 |
+| `example_patent_reader/` | **专利通俗解读**示例：仓库只保留 [README.md](example_patent_reader/README.md) 中的 **CDN 镜像下载链接**；PDF 等材料本地自备（已 gitignore） |
+
+冒烟用极简 TXT 见 `tests/fixtures/patent_reader_sample.txt`。
+
+## 如何使用 `example_patent_reader`（阅读模式）
+
+按 [example_patent_reader/README.md](example_patent_reader/README.md) 下载镜像 PDF 到 `source/` 后，再以本地路径触发解读；另备 `CN105552277B` 可用于关联测试。
 
 ## 如何使用 `example_batch_job_scheduler` 跑出效果
 
