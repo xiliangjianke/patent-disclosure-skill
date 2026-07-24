@@ -1,106 +1,147 @@
 ---
 name: patent-disclosure-skill
-description: "通用中国专利挖掘发现与交底书生成全流程：扫描项目文档挖掘专利点、讨论融合、基于脱敏模版生成技术交底书、联网查新、生成后自检含逻辑闭环与公式参数一致性。| Patent mining, disclosure drafting, prior-art search, and consistency self-check."
-version: "1.9.0"
+description: "中国专利：从项目文档挖掘专利点并生成可交付技术交底书（查新、脱敏成文、自检与迭代）；或将已有专利解读为通俗笔记与 Obsidian 知识图谱（叙事故事线、公开线索辅助）。| China patents: draft technical disclosures from project docs, or read existing patents into plain-language notes and an Obsidian knowledge graph."
+version: "2.0.0"
 user-invocable: true
-argument-hint: "[可选：项目路径或技术主题关键词]"
+argument-hint: "[可选：项目路径 / 技术主题 / 专利号或 PDF 路径]"
 allowed-tools: Read, Write, Edit, Grep, Glob, WebSearch, Bash
 ---
 
-# 专利挖掘与交底书生成
+# 中国专利 · 交底书编写与通俗解读
 
-本技能覆盖 **专利点挖掘** → **查新与差异化** → **交底书生成** → **自检完善** 全流程；分步指令在 **`prompts/`**，每步执行前 **`Read`** 对应文件，与步骤的对照见「Prompt 文件映射」。
+本技能支持两种用法；分步指令在 **`prompts/`**，执行前须 **`Read`** 对应文件。
+
+| 模式 | 何时用 | 主入口 |
+|------|--------|--------|
+| **A · 交底书编写** | 从项目材料挖专利点 → 查新 → 成稿 `.md`/`.docx` → 迭代 | 下文「交底书主流程」 |
+| **B · 专利通俗解读** | 已有公开号 / PDF / 全文，原文抽象难读，要通俗叙事 + 图谱 | 下文「专利通俗解读」+ `patent_plain_reader.md` |
+
+提供**专利号或专利全文/PDF**且意图为「读懂」时 → **优先模式 B**，**不**默认跑交底书 Step 1–8。
 
 ## 环境与约定
 
-- **语言**：默认与用户语种一致；专利与法律术语采用行业常用表述。
-- **图示定稿（Step 7）**：**3.2**/**3.4** 用 fenced **mermaid**；执行方式、**`mmdc`** 安装与降级规则见下表「交底书定稿交付」行及 **`tools/README.md`**。
+- **语言**：默认与用户语种一致；专利与法律术语用行业常用表述。
+- **交底书图示（Step 7）**：**3.2**/**3.4** 用 fenced **mermaid**；见工具表与 **`tools/README.md`**。
+- **解读 + Obsidian**：**强烈推荐**配置库（`PATENT_READER_OBSIDIAN_VAULT`），以完整体验索引、Canvas 知识图谱、术语网、关系图配色与公开线索旁注；无库可降级 `outputs/patent_reader/`。入库时**自动** bootstrap（CSS / Bases / 关系图），勿再引导用户手动装 CSS。用户侧 Obsidian 安装与可选社区插件见 **`docs/obsidian-setup-guide.md`**。
 
 ---
 
 ## 触发条件
 
-在用户使用以下任一方式时启用本技能：
-
-- 明确提及：专利挖掘、专利点、技术交底书、交底书、专利交底书、查新、现有技术对比等
-- 斜杠或简短指令：如 `/patent-disclosure-skill`、`/patent-disclosure`、`/交底书`
-- **迭代模式（按意图识别）**：当用户意图明显是在**已有交底书或上一轮输出**上继续工作（如改章节、补实施例、补材料、修正参数/事实、调整表述等），**无需**用户写出「迭代」等固定词，也**不必**询问是否进入迭代——Agent 应 **`Read`** **`prompts/iteration_context.md`**，再 **`Read`** `prompts/merger.md`（侧重**新材料、扩展合并**）或 `prompts/correction_handler.md`（侧重**纠错、与事实或风格不符**），**严格按该文件开头的「执行门禁」**（优先执行，不可跳过）**做完合并或纠正**，**另存为新文件**：**`{案件名}_{YYYYMMDDHHmmss}.md`** 与同名 **`.docx`**（与首次定稿同一命名规则，见 **`disclosure_builder.md` §7.3 第 5 点**），**不覆盖**旧稿（除非用户明确要求）。**禁止**在迭代意图已成立时默认回到 Step 3–4 专利点全文分析（除非用户明确要求重新挖掘专利点）。对话中**已出现**交底书路径、附件或上文刚交付的草稿时，优先按迭代处理。
+- **交底书**：专利挖掘、专利点、技术交底书、交底书、查新、现有技术对比；`/patent-disclosure-skill`、`/交底书` 等。
+- **通俗解读**：专利解读、读专利、看懂专利、反向专利、专利翻译成通俗；`/patent-read`、`/读专利`；或用户给出公开号 / 专利 PDF / 全文且目标为理解而非写交底书。
+- **交底书迭代（意图识别）**：在**已有交底书**上补材料、改章节、纠错等——**无需**固定「迭代」一词，也**不必**先问是否迭代。`Read` `iteration_context.md`，再 `merger.md`（扩合并）或 `correction_handler.md`（纠错）；**另存** `{案件名}_{YYYYMMDDHHmmss}.md`/`.docx`，**不覆盖**旧稿（除非用户明确要求）。**禁止**迭代意图成立时默认回到 Step 3–4 重挖专利点。对话中已有交底书路径/附件时优先按迭代处理。
 
 ---
 
 ## 工具与数据来源
 
-按任务选用能力；具体工具名称以当前 Agent 环境为准。
-
-若扫描范围内含 **Word（.docx）** 或 **PowerPoint（.pptx）**，须在 Step 2 纳入阅读前用本仓库 **`docx_to_md.py`** / **`pptx_to_md.py`** 转为 Markdown；依赖 **`pip install -r requirements.txt`**，命令与说明见下表对应行。
+按任务选用；工具名以当前 Agent 环境为准。扫描含 **`.docx`/`.pptx`** 时，Step 2 阅读前须先 `docx_to_md.py` / `pptx_to_md.py`（`pip install -r requirements.txt`）。
 
 ### 常见任务与建议方式
 
 | 任务 | 建议方式 |
 |------|----------|
-| 加载分步指令 | **`Read`** → `${CLAUDE_SKILL_DIR}/prompts/*.md`，见下表 |
-| 读代码、设计文档、PDF、图片 | 文件读取工具；大仓库先用搜索/语义检索定位再精读 |
-| Word（.docx）→ Markdown + 抽取图片（扫描前） | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/docx_to_md.py --input {path}.docx --output {dir}/{name}.md`；图片默认写入与 `.md` 同级的 `{name}_media/`；需 `pip install -r requirements.txt`（含 mammoth）；复杂版式可改由所内导出 PDF/MD 再扫 |
-| PowerPoint（.pptx）→ Markdown + 抽取图片（扫描前） | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/pptx_to_md.py --input {path}.pptx --output {dir}/{name}.md`；默认 `{name}_media/`；需 `pip install -r requirements.txt`（含 python-pptx）；**旧版 .ppt 不支持**，请先另存为 `.pptx`；图表/SmartArt 等若未以图片形状嵌入则可能仅能从备注或另行导出补全 |
-| 罗列目录、按名找文件 | 目录列举 / 按文件名搜索 |
-| 联网查新（Step 5） | 执行前 **`Read`** `prompts/prior_art_search.md`。**中国专利公布公告**：优先 **`Bash`** 运行 `cnipa_epub_search.py`；**须在生成命令前**归纳 **2～8 个相关度高的语义块**；**执行时须分多次调用**，**每次仅传一个**词块，**自行按 `pub_number` 合并**多轮 `EPUB_HITS_JSON`（勿单次工具调用堆多个 argv，见该 prompt）。一步拉取+解析、**不写 HTML 落盘**；须 **`pip install -r tools/requirements-cnipa.txt`** 且 **`python -m playwright install chromium`**。**`abstract` 规定必用**同该 prompt。需整句一次 AND 或保存 HTML 时用 `cnipa_epub_crawler.py`；异常或无果再 **WebSearch** |
-| 交底书定稿交付（**须同时** .md + .docx） | **3.2** 系统框图与 **3.4** 流程图均用 fenced ``mermaid``，**不要** ASCII 文字流程图/框图。定稿执行 **`tools/mermaid_render.py`**：mermaid 转 PNG（失败块保留围栏）后默认生成同名 **.docx**；若 Word 失败，按 stderr 提示手动运行 **`md_to_docx.py`**。详见 **`tools/README.md`** |
-| 保存交底书路径 | 写入用户指定路径；未指定时可建议 `./outputs/{案件标识}/`；**凡交付的** `.md` / `.docx` 须为 **`{案件名}_{YYYYMMDDHHmmss}`**（§7.3 第 5 点，**含首次定稿与迭代**），勿默认覆盖旧稿；`outputs/` 整目录默认由 `.gitignore` 忽略 |
-| 迭代对话留档 | 每轮 **merger / correction** 交付后，在案件目录追加 **`交底书修订对话记录.md`**（**`tools/iteration_dialog_log.py`** 或等价手工），见 **`prompts/iteration_context.md`** |
+| 加载分步指令 | **`Read`** → `${CLAUDE_SKILL_DIR}/prompts/*.md` |
+| 读代码、设计文档、PDF、图片 | 文件读取；大仓库先检索再精读 |
+| Word / PPT → Markdown | `docx_to_md.py` / `pptx_to_md.py`（见上） |
+| 联网查新（交底书 Step 5） | **`Read`** `prior_art_search.md`。优先 **`cnipa_epub_search.py`**：先归纳 2～8 语义块，**每次工具调用仅一词**，自行按 `pub_number` 合并 `EPUB_HITS_JSON`；需 `tools/requirements-cnipa.txt` + Playwright Chromium。`abstract` 必用。异常或无果再 **WebSearch** |
+| 交底书定稿（**.md + .docx**） | **3.2/3.4** 用 mermaid；`mermaid_render.py` → PNG 并默认出 docx。见 **`tools/README.md`** |
+| 交底书落盘 | 建议 `./outputs/{案件标识}/`；文件名 **`{案件名}_{YYYYMMDDHHmmss}`**（§7.3 第 5 点，含首次与迭代） |
+| 迭代对话留档 | 案件目录追加 **`交底书修订对话记录.md`**（`iteration_dialog_log.py`） |
+| **专利通俗解读** | **`Read`** `patent_plain_reader.md`。**先** `check_obsidian_env.py`（**强烈推荐**有库；未检测到则询问并用 `--set`；用户明确不要库才跳过）。仅公开号时用 **`fetch_patent_pdf.py`**（源表 `references/patent_pdf_sources.yaml`；**禁止**会话内现写下载脚本）→ `extract` → 叙事/权要可视化 → 公开线索由 **Agent 读 URL 写 summary** → `write_patent_obsidian_note`（入库自动 bootstrap；线索脚本抓取仅 `--fetch-clues-fallback`）。交付后可选社区插件引导；库内 ≥2 篇**须反问**关联，同意后 `link_patent_notes.py` |
 
 ---
 
 ## Prompt 文件映射
 
+### 交底书编写
+
 | 步骤 | 文件 | 用途 |
 |------|------|------|
-| Step 1 | `prompts/intake.md` | 边界与输入问题 |
-| Step 2 | `prompts/project_scan.md` | 项目文档扫描；**须**对 `.docx`/`.pptx` 先转换再读（见该文件「Office 文档」节）；独立图片目录可跳过 |
-| Step 3–4 | `prompts/patent_points_analyzer.md` | 候选专利点、融合与选定 |
-| Step 5 | `prompts/prior_art_search.md` | 联网查新与分析要求 |
-| Step 6 | `prompts/disclosure_preview.md` | 全文前的摘要预览 |
-| Step 7 | `prompts/disclosure_builder.md` + `prompts/template_reference.md` | 交底书结构、脱敏、**符号与公式体例（§7.7）**与图示规范；**mermaid 与 3.4.1 符号/公式范例在 template_reference** |
-| Step 8 | `prompts/disclosure_self_check.md` | 内部自检，不写入正文 |
-| 迭代 | `prompts/iteration_context.md` | 迭代意图、落盘命名、**修订对话记录 md**（含对话/记录时间） |
-| 迭代 | `prompts/merger.md` | 新材料增量合并；**文首含门禁**；输出 `{案件名}_{时间戳}.md`/`.docx` |
-| 迭代 | `prompts/correction_handler.md` | 对话纠正；**文首含门禁**；输出 `{案件名}_{时间戳}.md`/`.docx` |
+| Step 1 | `prompts/intake.md` | 边界与输入 |
+| Step 2 | `prompts/project_scan.md` | 项目扫描；Office 须先转换 |
+| Step 3–4 | `prompts/patent_points_analyzer.md` | 专利点融合与选定 |
+| Step 5 | `prompts/prior_art_search.md` | 查新 |
+| Step 6 | `prompts/disclosure_preview.md` | 摘要预览 |
+| Step 7 | `prompts/disclosure_builder.md` + `template_reference.md` | 成文、脱敏、符号/公式体例、mermaid |
+| Step 8 | `prompts/disclosure_self_check.md` | 内部自检（不入正文） |
+| 迭代 | `iteration_context.md` / `merger.md` / `correction_handler.md` | 扩合并 / 纠错另存 |
+
+### 专利通俗解读
+
+| 步骤 | 文件 | 用途 |
+|------|------|------|
+| 门禁 | `check_obsidian_env.py`（见 `patent_plain_reader.md` 第 0 步） | 探测/写入库路径；强烈推荐有库 |
+| 仅公开号取 PDF | `tools/patent_reader/fetch_patent_pdf.py` + `references/patent_pdf_sources.yaml` | 固化下载（第 1 步前）；**禁止**会话内现写脚本 |
+| 主流程 | `prompts/patent_plain_reader.md` | extract / 附图 / 权树校对 / 线索 / 写笔记 / 入库（须先 Read） |
+| 写笔记时 | `prompts/obsidian_ofm_companion.md` + `references/patent_obsidian_format.md` + `assets/patent_note_template.md` | Callout / 结构 / 模板 |
+| 写笔记时（按需） | `references/ipc_application_hints.yaml` | IPC 应用场景坐标 |
+| 自检 | `prompts/patent_reader_self_check.md` | 交付前内部自检（不入笔记） |
+| 交付时（对话） | `prompts/obsidian_plugin_guide.md` | 可选社区插件引导（不入笔记） |
+| 用户文档 | `docs/obsidian-setup-guide.md` | 装 Obsidian / 社区插件（给人看，勿当主链全文 Read） |
+| 按需 | `tools/patent_reader/README.md` | 解读工具链说明 |
+
+顺序摘要：门禁 →（仅公开号）`fetch_patent_pdf` → 主流程（extract / 附图 / 线索 / 入库）→ 写笔记时读 ofm/format/模板 → lint 后自检 → 已入库则交付引导；用户已给 PDF/全文则跳过下载；`obsidian-setup-guide` 与工具 README 仅按需查阅。
 
 ---
 
-## 主流程（执行顺序）
+## 模式 A · 交底书主流程
 
-1. **`Read`** `intake.md` → 执行 Step 1  
-2. **`Read`** `project_scan.md` → 执行 Step 2  
-3. **`Read`** `patent_points_analyzer.md` → 执行 Step 3–4  
-4. **`Read`** `prior_art_search.md` → 执行 Step 5  
-5. **`Read`** `disclosure_preview.md` → 执行 Step 6；用户可跳过  
-6. **`Read`** `disclosure_builder.md` 与 **`Read`** `template_reference.md` → 执行 Step 7（**首次交付**的 `.md`/`.docx` 亦须 **`{案件名}_{YYYYMMDDHHmmss}`**，§7.3 第 5 点）；交付对话中**须**按 **`disclosure_builder.md` §7.6** 补充「权利要求偏向点」建议交互（**仅对话**，不入正文）  
-7. **`Read`** `disclosure_self_check.md` → 内部执行 Step 8，修订后交付  
+1. **`Read`** `intake.md` → Step 1  
+2. **`Read`** `project_scan.md` → Step 2  
+3. **`Read`** `patent_points_analyzer.md` → Step 3–4  
+4. **`Read`** `prior_art_search.md` → Step 5  
+5. **`Read`** `disclosure_preview.md` → Step 6（可跳过）  
+6. **`Read`** `disclosure_builder.md` + `template_reference.md` → Step 7（文件名 §7.3 第 5 点；对话附 §7.6 权利要求偏向点，**不入正文**）  
+7. **`Read`** `disclosure_self_check.md` → Step 8 内部自检后交付  
 
-**禁止**：交底书正文中包含「自检清单」章节；自检仅内部使用。
+**禁止**：交底书正文出现「自检清单」章节。
 
 ---
 
-## 迭代模式（摘要）
+## 模式 B · 专利通俗解读
 
-**启用方式**：根据用户**自然语言意图**判断（见上文「触发条件」），**不要求**固定关键词，**默认不**为「是否迭代」打断用户。
+**启用**：读懂已有专利（见触发条件），且**非**交底书迭代。
 
-- **补充材料 / 扩展章节**或 **§7.6 第五章权利要求书式强化（用户已声明侧重点）**：`Read` → `iteration_context.md` → `merger.md`；合并结果**另存为**带时间戳的 `.md`/`.docx`（§7.3 第 5 点）；**追加** `交底书修订对话记录.md`（`iteration_dialog_log.py` 或手工）；完成后**必须**输出「合并摘要」留档；若本轮亦为定稿交付，**仍建议**简短附带 §7.6 类引导  
-- **指出错误 / 与事实或参数不符**：`Read` → `iteration_context.md` → `correction_handler.md`；纠正结果**另存为**带时间戳的 `.md`/`.docx`；**追加**对话记录；完成后**必须**输出「纠正摘要」留档；定稿交付时**还须**按 **`disclosure_builder.md` §7.6** 附「权利要求偏向点」引导（见 **`correction_handler.md`** 末尾）  
+**目标能力**（交付物应体现）：
 
-主流程 Step 7→8 的 **`disclosure_self_check.md`** 仍在新稿定稿路径上内部执行。
+- **取证解读**：权要树、术语、特征—说明书—附图对照  
+- **叙述故事线**：一句话 + 问题/思路/怎么做/效果/差别等连贯叙事  
+- **知识图谱**：`*_图谱.canvas`、术语双链、关系图配色；多篇可 `_专利关联.canvas`  
+- **公开线索辅助**：≤3 条公开材料，L1–L4 旁注与 `clues/`（**推测语境，非权要/说明书证据**）
+
+**步骤**：
+
+1. **`Read`** `patent_plain_reader.md` → **先跑** `check_obsidian_env.py`（强烈推荐有库；无库则询问路径/`--set`，或确认仅 outputs）→ **仅公开号、无本地全文时**跑 **`fetch_patent_pdf.py`**（源表 `patent_pdf_sources.yaml`；失败可 `cnipa_epub_search` 核验元数据，**勿**现写下载脚本）→ `extract_patent_text`（及附图）→ 校对 `claim_tree` / 写 `claim_deltas` → 叙事与可视化 → Agent 读线索 URL 写 summary → 写笔记 → lint → `write_patent_obsidian_note`（有库时入库并**自动** bootstrap）  
+2. **`Read`** `obsidian_ofm_companion.md` + `patent_obsidian_format.md` + 模板  
+3. **`Read`** `patent_reader_self_check.md` → lint 通过后复核  
+4. 已入库：对话末尾 **`Read`** `obsidian_plugin_guide.md`（仅可选社区插件；勿要求用户再装 CSS）  
+5. 库内 ≥2 篇解读时**须反问**是否关联；同意后 `link_patent_notes.py`  
+
+**与模式 A 互斥**：解读**不**跑交底书 Step 1–8。若用户要「先解读再写交底书」，先完成模式 B 交付，再询问是否进入 intake。
+
+---
+
+## 迭代模式（交底书 · 摘要）
+
+按自然语言意图启用（见触发条件），**不**为「是否迭代」打断用户。
+
+- **补材料 / 扩展 / §7.6 侧重点已声明**：`iteration_context.md` → `merger.md` → 另存时间戳稿 + 追加修订对话记录 + 输出合并摘要  
+- **纠错 / 与事实不符**：`iteration_context.md` → `correction_handler.md` → 另存 + 记录 + 纠正摘要；定稿仍附 §7.6 引导  
+
+新稿定稿路径上仍内部执行 `disclosure_self_check.md`。
 
 ---
 
 ## Agent 自用工作流检查清单
 
 ```
-□ 已按步骤 Read 对应 prompts；Step 2 若目录含 Office，已执行 docx_to_md / pptx_to_md 并读了产出 `.md`
-□ 识别到「在已有交底书上修改」类意图时，已 Read `iteration_context.md` 并选用 merger 或 correction_handler（而非从头跑扫描）；交付为**新** `{案件名}_{时间戳}.md`/`.docx`，未无故覆盖旧稿
-□ 执行 merger / correction_handler 后，已在对话中输出该文件要求的留档摘要（合并摘要 / 纠正摘要）；案件目录已追加 **`交底书修订对话记录.md`**（或等价日志）
-□ 查新完成且写入 1.1 与区别论述（符合 `prior_art_search.md`：**优先** `tools/cnipa_epub_search.py`，**国知局侧已分多次调用、每轮一词，并已自行合并** `EPUB_HITS_JSON`；**`abstract` 必用且已充分理解后再概括**；异常或无果再 **WebSearch**）
-□ 除用户明确跳过外，完成摘要预览
-□ 脱敏、mermaid（定稿均已渲染为 PNG）、章节引用符合 template_reference；含公式时 **3.4.1 符号表、§7.7 体例**（维度下标、无字母多义、LaTeX 分隔符统一）及 **3.5 符号列同形** 已满足；**已交付 .md 与 .docx**，且**文件名符合 §7.3 第 5 点**（**凡交付均含**时间戳后缀）；**正文无**技能/示例仓库类文末脚注
-□ 定稿类对话已含 **`disclosure_builder.md` §7.6**「权利要求偏向点」建议交互（**不入正文**、**不捏造**未在稿内出现的保护取向）；迭代再走 merger 时见 **`iteration_context.md`** 表格补充行
-□ 自检在后台完成，正文无自检清单章节；含公式时已按 **`disclosure_self_check.md` §8.2** 复核**公式正确性与公式逻辑**（有误已在 Step 8 直接改稿）
+□ 已区分模式 A（交底书）/ B（解读）/ 交底书迭代，未混跑
+□ 已按步骤 Read 对应 prompts；Step 2 若含 Office，已 docx_to_md / pptx_to_md 并读产出 `.md`
+□ 「在已有交底书上改」类意图：已 Read iteration_context 并走 merger/correction；交付为新时间戳文件，未无故覆盖旧稿；已追加交底书修订对话记录.md 并输出留档摘要
+□ 查新：优先 cnipa_epub_search（分次一词并合并 EPUB_HITS_JSON）；abstract 必用；异常再 WebSearch；1.1 与区别论述已写
+□ 除用户跳过外已做摘要预览；脱敏/mermaid/§7.7/3.4.1 与 .md+.docx 时间戳文件名符合要求；正文无技能仓库类脚注
+□ 定稿对话含 §7.6 权利要求偏向点（不入正文、不捏造）；自检仅后台，正文无自检清单
+□ 【模式 B】已 check_obsidian_env；仅公开号已用 fetch_patent_pdf（未现写下载脚本）；强烈推荐有库（无库已确认降级 outputs）；叙事/线索/图谱要点已覆盖；入库自动 bootstrap，未误导用户手装 CSS；≥2 篇已反问关联并按需 link_patent_notes
 ```

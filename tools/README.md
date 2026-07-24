@@ -274,6 +274,16 @@ python3 tools/pptx_to_md.py -i ./raw/deck.pptx -o ./knowledge/deck.md --media-di
 
 ---
 
+## 专利通俗解读（阅读模式）
+
+脚本与说明见 **[`patent_reader/README.md`](patent_reader/README.md)**。
+
+```bash
+pip install -r tools/patent_reader/requirements.txt
+```
+
+---
+
 ## 扩展其它脚本时
 
 - Word / PPT 转换依赖写在 `requirements.txt`。
